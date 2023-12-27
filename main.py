@@ -5,6 +5,8 @@ from concurrent import futures
 from viewing import view
 import requests
 import math
+import datetime
+from send_cubox import send_urls_from_json
 
 
 # 处理原始数据,去掉一些无用信息，让数据更整齐
@@ -44,24 +46,38 @@ def ProcessRawData(RawData):
 # 与上一次爬取对比，对于被删除的和自己取消收藏的视频,予以不同的标记
 def CompareLastTime(ReadPath, NewData):
     if not os.path.exists(ReadPath):
-        return NewData
+        print(ReadPath, " not exists!")
+        return NewData, NewData  # 当没有旧数据时，所有视频都是新的
     with open(ReadPath, 'r', encoding='utf-8') as f:
         OldData = json.load(f)
+        print("old data length: ", len(OldData))
+
+    NewData = {str(key): value for key, value in NewData.items()}
+    OldData = {str(key): value for key, value in OldData.items()}
+    newdata_keys = [str(i) for i in NewData.keys()]
+    olddata_keys = [str(i) for i in OldData.keys()]
     # 视频被删除，则保留上次的数据，并且标记
     for i in list(NewData.values()):
-        if i['视频信息']['标题'] == "已失效视频" and str(i['id']) in OldData.keys():
+        if i['视频信息']['标题'] == "已失效视频" and str(i['id']) in olddata_keys:
             print(OldData[str(i['id'])]['视频信息']['标题'] + '失效了')
             OldData[str(i['id'])]['是否失效'] = True
             NewData[str(i['id'])] = OldData[str(i['id'])]
 
     # 自己取消收藏，标记
     for i in list(OldData.values()):
-        if i['id'] not in NewData.keys():
+        if str(i['id']) not in newdata_keys:
             print(i['视频信息']['标题'] + '取消了收藏')
             OldData[str(i['id'])]['是否取消了收藏'] = True
             NewData[str(i['id'])] = OldData[str(i['id'])]
 
-    return NewData
+    new_links = {}
+    # 找到新的视频
+    for id in newdata_keys:
+        if id not in olddata_keys:
+            new_links[id] = NewData[id]
+    print("new links length: ", len(new_links))
+
+    return NewData, new_links
 
 
 # 爬取收藏夹的ID
@@ -142,12 +158,19 @@ def GetALLFavorite(WritePath):
     for i in ID_list:
         print('爬取中...当前正在爬取' + i['title'])
         filename = WritePath + i['title'] + '.json'
+        current_time = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        filename_new = WritePath + i['title'] + '_new_{}.json'.format(current_time)
 
         # 获得一个收藏夹信息，经过处理后一个json文件中
         data = GetOneFavorite(i['id'], math.ceil(i['media_count'] / 20) + 1)
-        a_fav_data = CompareLastTime(filename, ProcessRawData(data))
+        a_fav_data, new_links = CompareLastTime(filename, ProcessRawData(data))
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(a_fav_data, f, ensure_ascii=False)
+        if len(new_links) == 0:
+            continue
+        with open(filename_new, 'w', encoding='utf-8') as f:
+            json.dump(new_links, f, ensure_ascii=False)
+        send_urls_from_json(filename_new)
 
     os.remove(WritePath + '收藏夹id.json')
     print('所有收藏夹爬取完毕！！！')
@@ -246,9 +269,10 @@ def GetFace(PhotoURL_filename):
 
 
 if __name__ == "__main__":
-    path1 = '收藏夹信息/'  # 存放信息的文件夹
-    path2 = '视频封面/'  # 放视频封面的文件夹
-    path3 = 'up头像/'  # 放up主头像的文件夹
+    basepath = "/mnt/e/data/collection/"
+    path1 = basepath + '收藏夹信息/'  # 存放信息的文件夹
+    path2 = basepath + '视频封面/'  # 放视频封面的文件夹
+    path3 = basepath + 'up头像/'  # 放up主头像的文件夹
 
     if not os.path.exists(path1):
         os.makedirs(path1)
@@ -259,17 +283,17 @@ if __name__ == "__main__":
 
     time_list = []
     STime = time.perf_counter()
-    GetFavoriteID(path1, 289920431)  # 自己账号的uid
+    GetFavoriteID(path1, 234288706)  # 自己账号的uid
     GetALLFavorite(path1)
-    SetPhotoURl(path1)
-    GetCover('视频封面url.json')
-    GetFace('up头像url.json')
-    ETime = time.perf_counter()
-    time_list.append(time.strftime("%M:%S", time.gmtime(ETime - STime)))
-
-    STime = time.perf_counter()
-    view(path1, './收藏夹信息.xlsx')
+    # SetPhotoURl(path1)
+    # GetCover('视频封面url.json')
+    # GetFace('up头像url.json')
     ETime = time.perf_counter()
     time_list.append(time.strftime("%M:%S", time.gmtime(ETime - STime)))
     print('执行爬取代码所用时间：' + time_list[0])  # 视收藏视频数量和网速而定，800视频大概五分钟
-    print('将数据写入excel文件所用时间' + time_list[1])  # 800视频大概两分半钟
+
+    # STime = time.perf_counter()
+    # view(path1, './收藏夹信息.xlsx')
+    # ETime = time.perf_counter()
+    # time_list.append(time.strftime("%M:%S", time.gmtime(ETime - STime)))
+    # print('将数据写入excel文件所用时间' + time_list[1])  # 800视频大概两分半钟
