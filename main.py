@@ -172,7 +172,7 @@ def GetALLFavorite(WritePath):
             json.dump(new_links, f, ensure_ascii=False)
         send_urls_from_json(filename_new)
 
-    os.remove(WritePath + '收藏夹id.json')
+    # os.remove(WritePath + '收藏夹id.json')
     print('所有收藏夹爬取完毕！！！')
 
 

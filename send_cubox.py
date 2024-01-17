@@ -75,4 +75,4 @@ def send_urls_from_json(path_json):
 
 path_new_json = "/mnt/e/data/collection/收藏夹信息/默认收藏夹.json"
 path_new_json = "/mnt/e/data/collection/收藏夹信息/默认收藏夹_new_2023-12-27_22-33-00.json"
-send_urls_from_json(path_new_json)
+# send_urls_from_json(path_new_json)
